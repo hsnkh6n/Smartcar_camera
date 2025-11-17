@@ -1,3 +1,20 @@
+
+# Pi2 – Rear Camera Node
+
+This folder contains the scripts used on the Raspberry Pi 2 that runs the USB camera and (optionally) the distance sensor.
+
+## Layout
+
+- `mjpg_streamer/`
+  - `start_cam_stack.sh` – starts mjpg_streamer and the sensor backend
+- `sensors/`
+  - `distance.py` – simple distance sensor example using gpiozero
+- `systemd/`
+  - `cam-stack.service` – systemd unit to launch `start_cam_stack.sh` at boot
+
+Set a static IP on this Pi (e.g. `192.168.10.2/24`) so the Android head unit can reach the stream.
+
+
 Make it executable:
 
 chmod +x /home/pi/pi2_rear_camera/mjpg_streamer/start_cam_stack.sh
