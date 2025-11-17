@@ -1,155 +1,171 @@
-Raspberry Pi Car Camera System
+🚗 SmartCar Camera System
+Multi-Raspberry-Pi Rear Camera, Parking Assist & Android Head Unit
 
-Multi-Pi Smart Car Cameras • Rear Backup Assist • Android Dashboard • CAN-Bus Integration
+This project creates a smart rear-camera and parking assist system using a Raspberry Pi 2 (camera node) and a Raspberry Pi 4 running Android (head unit).
+The goal is to replace traditional reverse cameras with a fast, low-latency streaming solution, combined with distance sensing and optional CAN-Bus integration.
 
-This project turns your car into a smart camera system using multiple Raspberry Pis.
-It includes a rear-view camera, parking distance sensors, an Android dashboard display, and automatic power/shutdown logic triggered from CAN-Bus signals.
+📸 System Architecture
+Pi4 – Android Head Unit
 
- Project Overview
+Runs Android from SSD
+• Displays the live camera feed
+• Controls power/wakeup for Pi2
+• Automatically launches the camera app
+• Handles networking (static IP, routing, ADB)
 
-This system uses three Raspberry Pis working together:
+Pi2 – Rear Camera Node
 
-Pi2 — Rear Camera Node
+Runs Raspberry Pi OS
+• Streams MJPEG video at low-latency
+• Runs ultrasonic distance sensors
+• Starts automatically on boot
+• Sends stream to Pi4 over Ethernet
 
-Runs mjpg_streamer to stream 720p/1080p video
+🗂 Repository Structure
+Smartcar_camera/
+│
+├── android_pi4/
+│   ├── service.d/
+│   │   ├── 10-eth0-network.sh      # Static IP + routing
+│   │   ├── 30-cam-watcher.sh       # Auto-launch camera app
+│   ├── configs/
+│   │   ├── config.txt
+│   │   ├── cmdline.txt
+│   │   ├── resolution.txt
+│
+├── pi2_rear_camera/
+│   ├── mjpg_streamer/
+│   │   ├── start_cam_stack.sh      # Start streamer + sensors
+│   ├── sensors/
+│   │   ├── distance.py             # HC-SR04 example
+│   ├── systemd/
+│       ├── cam-stack.service       # Auto-start at boot
+│
+└── android_app/
+    └── (Android Studio Project)
 
-Hosts ultrasonic distance sensors via Python
-
-Automatically sleeps or wakes based on Pi4 commands
-
-Pi4 — Android Dashboard (Head Unit)
-
-Runs Android OS from SSD
-
-Receives video feed from Pi2
-
-Uses service scripts to enable static IP, watchdog, and auto-launch camera app
-
-Communicates with Pi2 over Ethernet tether
-
-Pi3 — Optional Dashboard Pi (Legacy Plan)
-
-Initially planned as extra display/logic node
-
-Now merged with Pi4 Android head unit
-
- Features
-
-✔ Rear-view camera with low-latency MJPEG streaming
-✔ Parking assist using distance sensors (HC-SR04)
-✔ Auto-wakeup and auto-sleep logic
-✔ Static IP communication between Pi4 and Pi2
-✔ Pi4 watchdog automatically launches camera app when Pi2 stream is detected
-✔ CAN-Bus controlled safe shutdown when car is turned off
-✔ Ethernet-over-USB or direct Ethernet communication
-
- Hardware Used
-
-Raspberry Pi 4 (Android OS) — car dashboard display
-
-Raspberry Pi 2 — rear camera + sensors
-
-USB Camera (UVC compatible)
-
-Ultrasonic Sensors (HC-SR04)
-
-12–14 inch HDMI LCD
-
-CAN-Bus USB adapter (MCP2515 or USB-CAN)
-Network Setup
-Pi4 (Android):
+📡 Network Setup
+Pi4 (Android Head Unit)
 IP: 192.168.10.5
-Subnet: 255.255.255.0
-Gateway: none
+NETMASK: 255.255.255.0
+GATEWAY: none (local link only)
 
-Pi2 (Rear Camera):
+Pi2 (Rear Camera Node)
 IP: 192.168.10.2
-Subnet: 255.255.255.0
+NETMASK: 255.255.255.0
 
+Direct Connection
 
-Connection:
-Pi4 (Android) → Ethernet → Pi2 (rear camera)
+Pi4 <—Ethernet—> Pi2
+(No router required.)
 
- Streaming Setup (Pi2 Rear Camera)
-Start mjpg_streamer
+⚙️ Android Pi4 Boot Scripts
+📌 Static IP & Routing
 
-start_stream.sh
+android_pi4/service.d/10-eth0-network.sh configures Ethernet:
 
-#!/bin/bash
-mjpg_streamer -i "input_uvc.so -d /dev/video0 -r 1280x720 -f 30" \
-              -o "output_http.so -p 8080 -w ./www"
+ifconfig eth0 192.168.10.5 netmask 255.255.255.0 up
+ip route add 192.168.10.0/24 dev eth0
 
+📌 Auto-Launch Camera App
 
-Access stream:
+android_pi4/service.d/30-cam-watcher.sh checks the stream and opens:
+
+com.hsn.reversecam/.MainActivity
+
+🎥 Pi2 Rear Camera (mjpg_streamer)
+
+The Pi2 starts MJPEG streaming using:
 
 http://192.168.10.2:8080/?action=stream
 
-Distance Sensor Script (Pi2)
+Startup Script
 
-distance.py
+pi2_rear_camera/mjpg_streamer/start_cam_stack.sh
 
-from gpiozero import DistanceSensor
-from time import sleep
+mjpg_streamer -i "input_uvc.so -d /dev/video0 -r 1280x720 -f 30" \
+              -o "output_http.so -p 8080 -w /usr/local/www"
 
-sensor = DistanceSensor(echo=17, trigger=4)
+Auto-start via systemd
 
-while True:
-    print(sensor.distance)
-    sleep(0.1)
+pi2_rear_camera/systemd/cam-stack.service
 
-
-Output served via Flask or simple JSON file for Pi4 to read.
-
- Pi4 Android Automation Scripts
-
-Android uses Magisk service scripts stored in:
-
-/data/adb/service.d/
-
-★ Static IP on boot
-
-10-eth0-static.sh
-
-#!/system/bin/sh
-sleep 30
-ifconfig eth0 192.168.10.5 netmask 255.255.255.0 up
-
-★ Camera App Auto-Launch Watcher
-
-30-cam-watcher.sh
-
-#!/system/bin/sh
-LOGFILE="/data/cam-watcher.log"
-APP_PKG="com.hsn.reversecam"
-APP_COMPONENT="com.hsn.reversecam/.MainActivity"
-STREAM_URL="http://192.168.10.2:8080/"
-STATE="DOWN"
-
-while true; do
-    if curl -Is --max-time 2 "$STREAM_URL" | head -n 1 | grep -q "200"; then
-        if [ "$STATE" = "DOWN" ]; then
-            am start -n "$APP_COMPONENT"
-            STATE="UP"
-        fi
-    else
-        STATE="DOWN"
-    fi
-    sleep 10
-done
-
-🔌 Power & CAN-Bus Logic
-
-Pi4 stays awake for N minutes after ignition is turned off to upload footage.
-Then it sends Pi2:
-
-ssh pi@192.168.10.2 "sudo shutdown -h now"
+[Service]
+ExecStart=/home/pi/pi2_rear_camera/mjpg_streamer/start_cam_stack.sh
+Restart=on-failure
 
 
-Then power relay cuts 5V to Pi2.
-Finally Pi4 enters Android deep sleep.
+Enable with:
 
-12V → 5V power converters
+sudo systemctl enable cam-stack.service
 
-SSD (for Android Pi4)
+🔌 Power Management (Optional CAN-Bus)
 
-Ethernet cable (Pi4 ⇆ Pi2)
+Planned features:
+
+✔ Pi4 stays awake for N minutes after car shutdown
+✔ Uploads video to cloud
+✔ Sends graceful shutdown to Pi2
+✔ Cuts power with a relay
+✔ Pi4 enters deep sleep
+
+(Code will be added after CAN-Bus integration)
+
+🧪 Testing the System
+1. Start the camera on Pi2
+sudo systemctl start cam-stack.service
+
+2. SSH into Android Pi4 & check static IP
+ip a
+
+
+You should see eth0 with 192.168.10.5.
+
+3. Ensure the stream is reachable
+
+Open on Pi4 browser:
+
+http://192.168.10.2:8080/?action=stream
+
+4. Put the car in reverse
+
+Your Android app should auto-launch.
+
+📱 Android App (com.hsn.reversecam)
+
+This folder contains a minimal Android app that:
+
+Runs full-screen
+
+Opens the MJPEG stream
+
+Auto-rotates to landscape
+
+Forces keep-screen-on
+
+📌 Located in:
+android_app/
+
+🚀 Future Features
+
+AI lane detection
+
+Parking overlay lines
+
+Side cameras (3-camera setup)
+
+Cloud upload system
+
+GPS + acceleration logging
+
+Full DVR recording
+
+🧾 License
+
+MIT License (You may use, modify, distribute freely)
+This repo is made with help of ChatGpt
+
+💬 Contact
+
+Project by Hassan (hsnkhan)
+Feel free to open Issues or submit Pull Requests.
