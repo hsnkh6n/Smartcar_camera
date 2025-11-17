@@ -1,0 +1,1 @@
+chmod 755 /data/adb/service.d/30-cam-watcher.sh
