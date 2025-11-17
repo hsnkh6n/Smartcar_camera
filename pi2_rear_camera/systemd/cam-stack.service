@@ -1,0 +1,14 @@
+[Unit]
+Description=Rear Camera Stream + Sensor Stack
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/pi2_rear_camera/mjpg_streamer
+ExecStart=/home/pi/pi2_rear_camera/mjpg_streamer/start_cam_stack.sh
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
