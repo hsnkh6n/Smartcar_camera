@@ -56,6 +56,97 @@ Ultrasonic Sensors (HC-SR04)
 12–14 inch HDMI LCD
 
 CAN-Bus USB adapter (MCP2515 or USB-CAN)
+Network Setup
+Pi4 (Android):
+IP: 192.168.10.5
+Subnet: 255.255.255.0
+Gateway: none
+
+Pi2 (Rear Camera):
+IP: 192.168.10.2
+Subnet: 255.255.255.0
+
+
+Connection:
+Pi4 (Android) → Ethernet → Pi2 (rear camera)
+
+ Streaming Setup (Pi2 Rear Camera)
+Start mjpg_streamer
+
+start_stream.sh
+
+#!/bin/bash
+mjpg_streamer -i "input_uvc.so -d /dev/video0 -r 1280x720 -f 30" \
+              -o "output_http.so -p 8080 -w ./www"
+
+
+Access stream:
+
+http://192.168.10.2:8080/?action=stream
+
+Distance Sensor Script (Pi2)
+
+distance.py
+
+from gpiozero import DistanceSensor
+from time import sleep
+
+sensor = DistanceSensor(echo=17, trigger=4)
+
+while True:
+    print(sensor.distance)
+    sleep(0.1)
+
+
+Output served via Flask or simple JSON file for Pi4 to read.
+
+ Pi4 Android Automation Scripts
+
+Android uses Magisk service scripts stored in:
+
+/data/adb/service.d/
+
+★ Static IP on boot
+
+10-eth0-static.sh
+
+#!/system/bin/sh
+sleep 30
+ifconfig eth0 192.168.10.5 netmask 255.255.255.0 up
+
+★ Camera App Auto-Launch Watcher
+
+30-cam-watcher.sh
+
+#!/system/bin/sh
+LOGFILE="/data/cam-watcher.log"
+APP_PKG="com.hsn.reversecam"
+APP_COMPONENT="com.hsn.reversecam/.MainActivity"
+STREAM_URL="http://192.168.10.2:8080/"
+STATE="DOWN"
+
+while true; do
+    if curl -Is --max-time 2 "$STREAM_URL" | head -n 1 | grep -q "200"; then
+        if [ "$STATE" = "DOWN" ]; then
+            am start -n "$APP_COMPONENT"
+            STATE="UP"
+        fi
+    else
+        STATE="DOWN"
+    fi
+    sleep 10
+done
+
+🔌 Power & CAN-Bus Logic
+
+Pi4 stays awake for N minutes after ignition is turned off to upload footage.
+Then it sends Pi2:
+
+ssh pi@192.168.10.2 "sudo shutdown -h now"
+
+
+Then power relay cuts 5V to Pi2.
+Finally Pi4 enters Android deep sleep.
 
 12V → 5V power converters
 
