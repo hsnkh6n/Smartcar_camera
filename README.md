@@ -21,28 +21,6 @@ Runs Raspberry Pi OS
 • Starts automatically on boot
 • Sends stream to Pi4 over Ethernet
 
-🗂 Repository Structure
-Smartcar_camera/
-│
-├── android_pi4/
-│   ├── service.d/
-│   │   ├── 10-eth0-network.sh      # Static IP + routing
-│   │   ├── 30-cam-watcher.sh       # Auto-launch camera app
-│   ├── configs/
-│   │   ├── config.txt
-│   │   ├── cmdline.txt
-│   │   ├── resolution.txt
-│
-├── pi2_rear_camera/
-│   ├── mjpg_streamer/
-│   │   ├── start_cam_stack.sh      # Start streamer + sensors
-│   ├── sensors/
-│   │   ├── distance.py             # HC-SR04 example
-│   ├── systemd/
-│       ├── cam-stack.service       # Auto-start at boot
-│
-└── android_app/
-    └── (Android Studio Project)
 
 📡 Network Setup
 Pi4 (Android Head Unit)
